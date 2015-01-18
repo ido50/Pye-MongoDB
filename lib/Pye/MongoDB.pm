@@ -124,6 +124,10 @@ so keep reading.
 
 =head2 log( $session_id, $text, [ \%data ] )
 
+If C<\%data> is provided, this module will traverse it recursively, replacing any
+hash-key that contains dots with semicolons, as MongoDB does not support dots in
+field names.
+
 =cut
 
 sub log {
@@ -173,7 +177,7 @@ sub session_log {
 =head2 list_sessions( [ \%opts ] )
 
 Takes all options defined by L<Pye>. The C<sort> option, however, takes a MongoDB
-sorting definition, that is a hash-ref, e.g. C<< { session_id => 1 } >>. This will
+sorting definition, that is a hash-ref, e.g. C<< { _id => 1 } >>. This will
 default to C<< { date => -1 } >>.
 
 =cut
