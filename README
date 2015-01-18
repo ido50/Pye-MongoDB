@@ -1,173 +1,127 @@
 NAME
-    Pye - Session-based logging platform on top of MongoDB
+    Pye::MongoDB - Log with Pye on top of MongoDB
 
 SYNOPSIS
-            use Pye;
+            use Pye::MongoDB;
 
-            my $pye = Pye->new;
+            my $pye = Pye::MongoDB->new(
+                    host => 'mongodb://logserver:27017',
+                    database => 'log_db',
+                    collection => 'myapp_log'
+            );
 
-            # on session/request/run/whatever:
+            # now start logging
             $pye->log($session_id, "Some log message", { data => 'example data' });
 
 DESCRIPTION
-    "Pye" is a dead-simple, session-based logging platform on top of
-    MongoDB. I built "Pye" due to my frustration with file-based loggers
-    that generate logs that are extremely difficult to read, analyze and
-    maintain.
+    This package provides a MongoDB backend for the Pye logging system. This
+    is currently the easiest backend to use, since no setup is needed in
+    order to start logging with it.
 
-    "Pye" is most useful for services (e.g. web apps) that handle requests,
-    or otherwise work in sessions, but can be useful in virtually any
-    application, including automatic (e.g. cron) scripts.
+    Messages will be stored in a MongoDB database with the following keys:
 
-    In order to use "Pye", your program must define an ID for every session.
-    "Session" can really mean anything here: a client session in a web
-    service, a request to your web service, an execution of a script,
-    whatever. As long as a unique ID can be generated, "Pye" can handle
-    logging for you.
+    *   "session_id" - the session ID, a string, always exists
 
-    Main features:
+    *   "date" - the date the messages was logged, in ISODate format, always
+        exists
 
-    *   Supporting data
+    *   "text" - the text of the message, a string, always exists
 
-        With "Pye", any complex data structure (i.e. hash) can be attached
-        to any log message, enabling you to illustrate a situation, display
-        complex data, etc.
+    *   "data" - supplemental JSON structure, optional
 
-    *   No log levels
+    An index on the "session_id" field will automatically be created.
 
-        Yeah, I consider this a feature. Log levels are a bother, and I
-        don't need them. All log messages in "Pye" are saved into the
-        database, nothing gets lost.
+  NOTES AND RECOMMENDATIONS
+    As of this writing (MongoDB v2.6), MongoDB is kind of a storage guzzler.
+    You might find it useful to create a TTL index on the log collection.
+    For example, the following line (entered into the "mongo" shell) will
+    create a time-to-live index of 2 days on a log collection:
 
-    *   Easy inspection
+            db.log_collection.ensureIndex({ date: 1 }, { expireAfterSeconds: 172800 })
 
-        "Pye" comes with a command line utility, pye, that offers quick
-        inspection of the log. You can easily view a list of current/latest
-        sessions and read the log of a specific session. No more mucking
-        about through endless log files, trying to understand which lines
-        belong to which session, or trying to find that area of the file
-        with messages from that certain date your software died on.
+    Alternatively, you could make the collection capped and limit it by
+    size. Note, however, that the _remove_session_logs() method will not
+    work in that case.
 
 CONSTRUCTOR
-  new( [ %opts ] )
-    Creates a new instance of this class. %opts is anything that can be
-    passed to MongoDB::MongoClient to initiate a database connection, plus
-    the following options:
+  new( [ %options ] )
+    Create a new instance of this class. All options are optional.
 
-    *   log_db
+    *   database - the name of the database, defaults to "logs"
 
-        The name of the database to use for saving log messages. Defaults to
-        "logs".
+    *   collection (or table) - the name of the collection, defaults to
+        "logs"
 
-    *   log_coll
+    *   be_safe - whether to enable the "safe" flag when inserting log
+        messages, defaults to a false value
 
-        The name of the collection in which to save the messages. Defaults
-        to "logs" too.
-
-    *   session_coll
-
-        The name of the collection in which to save session info. Defaults
-        to "sessions".
-
-    *   be_safe
-
-        Boolean indicating whether inserts should be safe (see "insert
-        ($object, $options?)" in MongoDB::Collection for more info).
-        Defaults to a false value.
+    Any other option you provide will be passed to MongoDB::MongoClient, so
+    pass anything needed in order to connect to the database server (such as
+    "host", "find_master", etc.).
 
 OBJECT METHODS
+    The following methods implement the Pye role, so you should refer to
+    "Pye" for their documentation. Some methods, however, have some
+    MongoDB-specific notes, so keep reading.
+
   log( $session_id, $text, [ \%data ] )
-    Inserts a new log message to the database, for the session with the
-    supplied ID and with the supplied text. Optionally, a hash-ref of
-    supporting data can be attached to the message.
-
-    You should note that for consistency, the session ID will always be
-    stored in the database as a string, even if it's a number.
-
-    If a data hash-ref has been supplied, "Pye" will make sure (recursively)
-    that no keys of that hash-ref have dots in them, since MongoDB will
-    refuse to store such hashes. All dots found will be replaced with
-    semicolons (";").
-
   session_log( $session_id )
-    Returns all log messages for the supplied session ID, sorted by date in
-    ascending order.
-
   list_sessions( [ \%opts ] )
-    Returns a list of sessions, sorted by the date of the first message
-    logged for each session in descending order. If no options are provided,
-    the latest 10 sessions are returned. The following options are allowed:
-
-    *   limit
-
-        How many sessions to list, defaults to 10.
-
-    *   query
-
-        A MongoDB query hash-ref to filter the sessions. Defaults to an
-        empty query. You can query on the session ID (in the "_id"
-        attribute) and the date (in the "date" attribute).
-
-    *   sort
-
-        A MongoDB sort hash-ref to sort the results. Defaults to "{ date =>
-        -1 }" so that sessions are sorted by date in descending order.
+    Takes all options defined by Pye. The "sort" option, however, takes a
+    MongoDB sorting definition, that is a hash-ref, e.g. "{ session_id => 1
+    }". This will default to "{ date => -1 }".
 
 CONFIGURATION AND ENVIRONMENT
-    "Pye" requires no configuration files or environment variables.
+    "Pye::MongoDB" requires no configuration files or environment variables.
 
 DEPENDENCIES
-    "Pye" depends on the following CPAN modules:
+    "Pye::MongoDB" depends on the following CPAN modules:
+
+    *   version
 
     *   Carp
 
     *   MongoDB
 
+    *   Pye
+
+    *   Role::Tiny
+
     *   Tie::IxHash
 
-    The command line utility, pye, depends on:
-
-    *   Getopt::Compact
-
-    *   JSON
-
-    *   Term::ANSIColor
-
-    *   Text::SpanningTable
-
 BUGS AND LIMITATIONS
-    Please report any bugs or feature requests to "bug-Pye@rt.cpan.org", or
-    through the web interface at
-    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Pye>.
+    Please report any bugs or feature requests to
+    "bug-Pye-MongoDB@rt.cpan.org", or through the web interface at
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Pye-MongoDB>.
 
 SUPPORT
     You can find documentation for this module with the perldoc command.
 
-            perldoc Pye
+            perldoc Pye::MongoDB
 
     You can also look for information at:
 
     *   RT: CPAN's request tracker
 
-        <http://rt.cpan.org/NoAuth/Bugs.html?Dist=Pye>
+        <http://rt.cpan.org/NoAuth/Bugs.html?Dist=Pye-MongoDB>
 
     *   AnnoCPAN: Annotated CPAN documentation
 
-        <http://annocpan.org/dist/Pye>
+        <http://annocpan.org/dist/Pye-MongoDB>
 
     *   CPAN Ratings
 
-        <http://cpanratings.perl.org/d/Pye>
+        <http://cpanratings.perl.org/d/Pye-MongoDB>
 
     *   Search CPAN
 
-        <http://search.cpan.org/dist/Pye/>
+        <http://search.cpan.org/dist/Pye-MongoDB/>
 
 AUTHOR
     Ido Perlmuter <ido@ido50.net>
 
 LICENSE AND COPYRIGHT
-    Copyright (c) 2013, Ido Perlmuter "ido@ido50.net".
+    Copyright (c) 2015, Ido Perlmuter "ido@ido50.net".
 
     This module is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself, either version 5.8.1 or any later

@@ -1,6 +1,6 @@
 package Pye::MongoDB;
 
-# ABSTRACT: Session-based logging platform on top of MongoDB
+# ABSTRACT: Log with Pye on top of MongoDB
 
 use version;
 
@@ -15,13 +15,86 @@ $VERSION = eval $VERSION;
 
 with 'Pye';
 
-my $now = MongoDB::Code->new(code => 'function() { return new Date() }');
+our $NOW = MongoDB::Code->new(code => 'function() { return new Date() }');
+
+=head1 NAME
+
+Pye::MongoDB - Log with Pye on top of MongoDB
+
+=head1 SYNOPSIS
+
+	use Pye::MongoDB;
+
+	my $pye = Pye::MongoDB->new(
+		host => 'mongodb://logserver:27017',
+		database => 'log_db',
+		collection => 'myapp_log'
+	);
+
+	# now start logging
+	$pye->log($session_id, "Some log message", { data => 'example data' });
+
+=head1 DESCRIPTION
+
+This package provides a MongoDB backend for the L<Pye> logging system. This is
+currently the easiest backend to use, since no setup is needed in order to start
+logging with it.
+
+Messages will be stored in a MongoDB database with the following keys:
+
+=over
+
+=item * C<session_id> - the session ID, a string, always exists
+
+=item * C<date> - the date the messages was logged, in ISODate format, always exists
+
+=item * C<text> - the text of the message, a string, always exists
+
+=item * C<data> - supplemental JSON structure, optional
+
+=back
+
+An index on the C<session_id> field will automatically be created.
+
+=head2 NOTES AND RECOMMENDATIONS
+
+As of this writing (MongoDB v2.6), MongoDB is kind of a storage guzzler. You might
+find it useful to create a TTL index on the log collection. For example, the following
+line (entered into the C<mongo> shell) will create a time-to-live index of 2 days
+on a log collection:
+
+	db.log_collection.ensureIndex({ date: 1 }, { expireAfterSeconds: 172800 })
+
+Alternatively, you could make the collection capped and limit it by size. Note, however,
+that the _remove_session_logs() method will not work in that case.
+
+=head1 CONSTRUCTOR
+
+=head2 new( [ %options ] )
+
+Create a new instance of this class. All options are optional.
+
+=over
+
+=item * database - the name of the database, defaults to "logs"
+
+=item * collection (or table) - the name of the collection, defaults to "logs"
+
+=item * be_safe - whether to enable the C<safe> flag when inserting log messages,
+defaults to a false value
+
+=back
+
+Any other option you provide will be passed to L<MongoDB::MongoClient>, so pass anything
+needed in order to connect to the database server (such as C<host>, C<find_master>, etc.).
+
+=cut
 
 sub new {
 	my ($class, %opts) = @_;
 
-	my $db_name = delete($opts{log_db}) || 'logs';
-	my $coll_name = delete($opts{log_coll}) || 'logs';
+	my $db_name = delete($opts{database}) || 'logs';
+	my $coll_name = delete($opts{collection}) || delete($opts{table}) || 'logs';
 	my $safety = delete($opts{be_safe}) || 0;
 
 	# use the appropriate mongodb connection class
@@ -45,25 +118,18 @@ sub new {
 
 =head1 OBJECT METHODS
 
+The following methods implement the L<Pye> role, so you should refer to C<Pye>
+for their documentation. Some methods, however, have some MongoDB-specific notes,
+so keep reading.
+
 =head2 log( $session_id, $text, [ \%data ] )
-
-Inserts a new log message to the database, for the session with the supplied
-ID and with the supplied text. Optionally, a hash-ref of supporting data can
-be attached to the message.
-
-You should note that for consistency, the session ID will always be stored in
-the database as a string, even if it's a number.
-
-If a data hash-ref has been supplied, C<Pye> will make sure (recursively)
-that no keys of that hash-ref have dots in them, since MongoDB will refuse to
-store such hashes. All dots found will be replaced with semicolons (";").
 
 =cut
 
 sub log {
 	my ($self, $sid, $text, $data) = @_;
 
-	my $date = $self->{db}->eval($now);
+	my $date = $self->{db}->eval($NOW);
 
 	my $doc = Tie::IxHash->new(
 		session_id => "$sid",
@@ -82,53 +148,51 @@ sub log {
 
 =head2 session_log( $session_id )
 
-Returns all log messages for the supplied session ID, sorted by date in ascending
-order.
-
 =cut
 
 sub session_log {
 	my ($self, $session_id) = @_;
 
-	$self->{coll}->find({ session_id => "$session_id" })->sort({ date => 1 })->all;
+	my $_map = sub {
+		my $d = shift;
+
+		my $doc = {
+			session_id => $d->{session_id},
+			date => $d->{date}->ymd,
+			time => $d->{date}->hms.'.'.$d->{date}->millisecond
+		};
+		$doc->{data} = $d->{data} if $d->{data};
+		return $doc;
+	};
+
+	local $MongoDB::Cursor::slave_okay = 1;
+
+	map($_map->($_), $self->{coll}->find({ session_id => "$session_id" })->sort({ date => 1 })->all);
 }
 
 =head2 list_sessions( [ \%opts ] )
 
-Returns a list of sessions, sorted by the date of the first message logged for each
-session in descending order. If no options are provided, the latest 10 sessions are
-returned. The following options are allowed:
-
-=over
-
-=item * B<limit>
-
-How many sessions to list, defaults to 10.
-
-=item * B<query>
-
-A MongoDB query hash-ref to filter the sessions. Defaults to an empty query. You can
-query on the session ID (in the C<_id> attribute) and the date (in the C<date> attribute).
-
-=item * B<sort>
-
-A MongoDB sort hash-ref to sort the results. Defaults to C<< { date => -1 } >> so that
-sessions are sorted by date in descending order.
-
-=back
+Takes all options defined by L<Pye>. The C<sort> option, however, takes a MongoDB
+sorting definition, that is a hash-ref, e.g. C<< { session_id => 1 } >>. This will
+default to C<< { date => -1 } >>.
 
 =cut
 
 sub list_sessions {
 	my ($self, $opts) = @_;
 
+	local $MongoDB::Cursor::slave_okay = 1;
+
 	$opts			||= {};
 	$opts->{skip}	||= 0;
 	$opts->{limit}	||= 10;
-	$opts->{query}	||= {};
 	$opts->{sort}	||= { date => -1 };
 
-	@{$self->{coll}->aggregate([
+	map +{
+		id => $_->{_id},
+		date => $_->{date}->ymd,
+		time => $_->{date}->hms.'.'.$_->{date}->millisecond
+	}, @{$self->{coll}->aggregate([
 		{ '$group' => { _id => '$session_id', date => { '$min' => '$date' } } },
 		{ '$sort' => $opts->{sort} },
 		{ '$skip' => $opts->{skip} },
@@ -186,27 +250,30 @@ sub _remove_dots {
 sub _remove_session_logs {
 	my ($self, $session_id) = @_;
 
-	$self->{lcoll}->remove({ session_id => "$session_id" }, { safe => $self->{safety} });
-	$self->{scoll}->remove({ _id => "$session_id" }, { safe => $self->{safety} });
+	$self->{coll}->remove({ session_id => "$session_id" }, { safe => $self->{safety} });
 }
 
 =head1 CONFIGURATION AND ENVIRONMENT
   
-C<Pye> requires no configuration files or environment variables.
+C<Pye::MongoDB> requires no configuration files or environment variables.
 
 =head1 DEPENDENCIES
 
-C<Pye> depends on the following CPAN modules:
+C<Pye::MongoDB> depends on the following CPAN modules:
 
 =over
 
-=item * Carp
+=item * L<version>
 
-=item * MongoDB
+=item * L<Carp>
 
-=item * Tie::IxHash
+=item * L<MongoDB>
 
-=item * Role::Tiny
+=item * L<Pye>
+
+=item * L<Role::Tiny>
+
+=item * L<Tie::IxHash>
 
 =back
 
