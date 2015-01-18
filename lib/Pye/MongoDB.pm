@@ -34,6 +34,9 @@ Pye::MongoDB - Log with Pye on top of MongoDB
 	# now start logging
 	$pye->log($session_id, "Some log message", { data => 'example data' });
 
+	# inspect the logs from the command line
+	pye -b MongoDB -d log_db -c myapp_log
+
 =head1 DESCRIPTION
 
 This package provides a MongoDB backend for the L<Pye> logging system. This is

@@ -13,6 +13,9 @@ SYNOPSIS
             # now start logging
             $pye->log($session_id, "Some log message", { data => 'example data' });
 
+            # inspect the logs from the command line
+            pye -b MongoDB -d log_db -c myapp_log
+
 DESCRIPTION
     This package provides a MongoDB backend for the Pye logging system. This
     is currently the easiest backend to use, since no setup is needed in
@@ -65,11 +68,15 @@ OBJECT METHODS
     MongoDB-specific notes, so keep reading.
 
   log( $session_id, $text, [ \%data ] )
+    If "\%data" is provided, this module will traverse it recursively,
+    replacing any hash-key that contains dots with semicolons, as MongoDB
+    does not support dots in field names.
+
   session_log( $session_id )
   list_sessions( [ \%opts ] )
     Takes all options defined by Pye. The "sort" option, however, takes a
-    MongoDB sorting definition, that is a hash-ref, e.g. "{ session_id => 1
-    }". This will default to "{ date => -1 }".
+    MongoDB sorting definition, that is a hash-ref, e.g. "{ _id => 1 }".
+    This will default to "{ date => -1 }".
 
 CONFIGURATION AND ENVIRONMENT
     "Pye::MongoDB" requires no configuration files or environment variables.
