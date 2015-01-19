@@ -71,6 +71,9 @@ on a log collection:
 Alternatively, you could make the collection capped and limit it by size. Note, however,
 that the _remove_session_logs() method will not work in that case.
 
+Also, consider using TokuMX as a drop-in replacement for MongoDB. It it faster, uses
+much less storage space and supports ACID transactions.
+
 =head1 CONSTRUCTOR
 
 =head2 new( [ %options ] )

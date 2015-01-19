@@ -46,6 +46,9 @@ DESCRIPTION
     size. Note, however, that the _remove_session_logs() method will not
     work in that case.
 
+    Also, consider using TokuMX as a drop-in replacement for MongoDB. It it
+    faster, uses much less storage space and supports ACID transactions.
+
 CONSTRUCTOR
   new( [ %options ] )
     Create a new instance of this class. All options are optional.
