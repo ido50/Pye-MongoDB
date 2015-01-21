@@ -26,7 +26,8 @@ Pye::MongoDB - Log with Pye on top of MongoDB
 	use Pye::MongoDB;
 
 	my $pye = Pye::MongoDB->new(
-		host => 'mongodb://logserver:27017',
+		host => 'mongodb://logserver1:27017,logserver2:27017',
+		find_master => 1,
 		database => 'log_db',
 		collection => 'myapp_log'
 	);
