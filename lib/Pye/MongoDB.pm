@@ -189,7 +189,8 @@ sub session_log {
 		my $doc = {
 			session_id => $d->{session_id},
 			date => $d->{date}->ymd,
-			time => $d->{date}->hms.'.'.$d->{date}->millisecond
+			time => $d->{date}->hms.'.'.$d->{date}->millisecond,
+			text => $d->{text}
 		};
 		$doc->{data} = $d->{data} if $d->{data};
 		return $doc;

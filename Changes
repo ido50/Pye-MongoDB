@@ -1,6 +1,9 @@
 Revision history for Pye
 
 {{$NEXT}}
+	- Bugfix: session_logs did not return the text of each message
+	- Added some notes about using the pye command line utility and how it
+	  passes options to MongoDB::MongoClient
 
 1.000000  2015-01-19 20:15:39+02:00 Asia/Jerusalem
 	- Bugfix: _remove_dots should also remove dots for hashes in an array
