@@ -49,6 +49,26 @@ DESCRIPTION
     Also, consider using TokuMX as a drop-in replacement for MongoDB. It it
     faster, uses much less storage space and supports ACID transactions.
 
+  USING THE pye COMMAND LINE UTILITY
+    The pye command line utility, used to inspect logs, provides all command
+    line options to the "new( [ %options ] )" constructor, which in turn
+    passes anything to MongoDB::MongoClient. This means that if your
+    database has replication, or requires authentication, you can provide
+    these options from the command line.
+
+    For example:
+
+            pye -b MongoDB
+                --host mongodb://server1:27017,server2:27017
+                --find_master=1
+                -d log_db
+                -c myapp_log
+                --username log_user
+                --password very_secret
+
+    "host", "find_master", "username" and "password" in this example will be
+    passed to "MongoDB::MongoClient".
+
 CONSTRUCTOR
   new( [ %options ] )
     Create a new instance of this class. All options are optional.

@@ -10,7 +10,7 @@ use MongoDB::Code;
 use Role::Tiny::With;
 use Tie::IxHash;
 
-our $VERSION = "1.000000";
+our $VERSION = "1.000001";
 $VERSION = eval $VERSION;
 
 with 'Pye';
@@ -73,6 +73,25 @@ that the _remove_session_logs() method will not work in that case.
 
 Also, consider using TokuMX as a drop-in replacement for MongoDB. It it faster, uses
 much less storage space and supports ACID transactions.
+
+=head2 USING THE pye COMMAND LINE UTILITY
+
+The L<pye> command line utility, used to inspect logs, provides all command line options
+to the L<new( [ %options ] )> constructor, which in turn passes anything to L<MongoDB::MongoClient>.
+This means that if your database has replication, or requires authentication, you can
+provide these options from the command line.
+
+For example:
+
+	pye -b MongoDB
+	    --host mongodb://server1:27017,server2:27017
+	    --find_master=1
+	    -d log_db
+	    -c myapp_log
+	    --username log_user
+	    --password very_secret
+
+C<host>, C<find_master>, C<username> and C<password> in this example will be passed to C<MongoDB::MongoClient>.
 
 =head1 CONSTRUCTOR
 
